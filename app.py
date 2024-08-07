@@ -4,8 +4,9 @@ import tempfile
 import streamlit as st
 from streamlit_chat import message
 from rag import ChatPDF
+from chatmarkdown import ChatMarkdown
 
-st.set_page_config(page_title="ChatPDF")
+st.set_page_config(page_title="ChatMarkdown")
 
 
 def display_messages():
@@ -43,14 +44,14 @@ def read_and_save_file():
 def page():
     if len(st.session_state) == 0:
         st.session_state["messages"] = []
-        st.session_state["assistant"] = ChatPDF()
+        st.session_state["assistant"] = ChatMarkdown()
 
-    st.header("ChatPDF")
+    st.header("ChatMarkdown")
 
     st.subheader("Upload a document")
     st.file_uploader(
         "Upload document",
-        type=["pdf"],
+        type=["md"],
         key="file_uploader",
         on_change=read_and_save_file,
         label_visibility="collapsed",
