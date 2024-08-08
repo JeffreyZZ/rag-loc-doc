@@ -1,5 +1,5 @@
 #!/bin/env python3
-import os
+import os, time
 import tempfile
 import streamlit as st
 from streamlit_chat import message
@@ -37,7 +37,10 @@ def read_and_save_file():
             file_path = tf.name
 
         with st.session_state["ingestion_spinner"], st.spinner(f"Ingesting {file.name}"):
-            st.session_state["assistant"].ingest(file_path)
+            is_ingested = st.session_state["assistant"].ingest(file_path)
+            if not is_ingested:
+                st.session_state["messages"].append((f"{file.name} has no content.", False))
+            time.sleep(1)    
         os.remove(file_path)
 
 

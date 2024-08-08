@@ -22,6 +22,7 @@ class ChatMarkdown:
             ("####", "Header 4")
         ]
         self.text_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=headers_to_split_on)
+        # TODO: prompt template for Ollama
         self.prompt = PromptTemplate.from_template(
             """
             <s> [INST] You are an assistant for question-answering tasks. Use the following pieces of retrieved context 
@@ -38,11 +39,16 @@ class ChatMarkdown:
         docs = loader.load()
         all_chunks=[]
         for doc in docs:
-            chunks = self.text_splitter.split_text(doc.page_content)
-            all_chunks.extend(chunks)
-
+            if doc.page_content: 
+                chunks = self.text_splitter.split_text(doc.page_content)
+                all_chunks.extend(chunks)
+                   
+        # Check if all_chunks is an empty list
+        if not all_chunks:
+            return False
+        
         # TODO: replace FastEmbedEmbeddings with Ollama
-        vector_store = Chroma.from_documents(documents=all_chunks, embedding=FastEmbedEmbeddings())
+        vector_store = Chroma.from_documents(documents=all_chunks, embedding=FastEmbedEmbeddings()) 
         self.retriever = vector_store.as_retriever(
             search_type="similarity_score_threshold",
             search_kwargs={
@@ -52,9 +58,10 @@ class ChatMarkdown:
         )
 
         self.chain = ({"context": self.retriever, "question": RunnablePassthrough()}
-                      | self.prompt
-                      | self.model
-                      | StrOutputParser())
+                    | self.prompt
+                    | self.model
+                    | StrOutputParser())
+        return True
 
     def ask(self, query: str):
         if not self.chain:
