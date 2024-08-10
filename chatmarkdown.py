@@ -3,6 +3,7 @@ from langchain_community.chat_models import ChatOllama
 from langchain_community.embeddings import FastEmbedEmbeddings
 from langchain.schema.output_parser import StrOutputParser
 from langchain_community.document_loaders import UnstructuredMarkdownLoader
+from langchain_community.document_loaders import TextLoader
 from langchain.text_splitter import MarkdownHeaderTextSplitter
 from langchain.schema.runnable import RunnablePassthrough
 from langchain.prompts import PromptTemplate
@@ -21,7 +22,7 @@ class ChatMarkdown:
             ("###", "Header 3"), 
             ("####", "Header 4")
         ]
-        self.text_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=headers_to_split_on)
+        self.text_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=headers_to_split_on, strip_headers=False)
         # TODO: prompt template for Ollama
         self.prompt = PromptTemplate.from_template(
             """
@@ -35,7 +36,7 @@ class ChatMarkdown:
         )
 
     def ingest(self, md_file_path: str):
-        loader = UnstructuredMarkdownLoader(file_path=md_file_path)
+        loader = TextLoader(file_path=md_file_path, encoding = 'UTF-8')
         docs = loader.load()
         all_chunks=[]
         for doc in docs:
