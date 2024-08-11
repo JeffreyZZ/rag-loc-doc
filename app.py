@@ -40,7 +40,7 @@ def read_and_save_file():
             is_ingested = st.session_state["assistant"].ingest(file_path)
             if not is_ingested:
                 st.session_state["messages"].append((f"{file.name} has no content.", False))
-            time.sleep(1)    
+            time.sleep(0.1)    
         os.remove(file_path)
 
 

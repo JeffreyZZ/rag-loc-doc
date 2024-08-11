@@ -49,8 +49,8 @@ class ChatMarkdown:
             return False
         
         # TODO: replace FastEmbedEmbeddings with Ollama
-        vector_store = Chroma.from_documents(documents=all_chunks, embedding=FastEmbedEmbeddings()) 
-        self.retriever = vector_store.as_retriever(
+        self.vector_store = Chroma.from_documents(documents=all_chunks, embedding=FastEmbedEmbeddings()) 
+        self.retriever = self.vector_store.as_retriever(
             search_type="similarity_score_threshold",
             search_kwargs={
                 "k": 3,
@@ -67,8 +67,16 @@ class ChatMarkdown:
     def ask(self, query: str):
         if not self.chain:
             return "Please, add a markdown document first."
-
-        return self.chain.invoke(query)
+        # return the query results for debugging purpose
+        results = self.vector_store.similarity_search_with_score(query, k=3)
+        chunks = ""
+        for doc, score in results:
+            chunks += f"""-----------------------------------------------------------
+            {doc.metadata}
+            {score:.4f}
+            {doc.page_content}
+            """      
+        return self.chain.invoke(query) + '\n' + chunks
 
     def clear(self):
         self.vector_store = None
