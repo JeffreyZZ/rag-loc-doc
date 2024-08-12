@@ -26,12 +26,14 @@ class ChatMarkdown:
         # TODO: prompt template for Ollama
         self.prompt = PromptTemplate.from_template(
             """
-            <s> [INST] You are an assistant for question-answering tasks. Use the following pieces of retrieved context 
-            to answer the question. If you don't know the answer, just say that you don't know. Use three sentences
-             maximum and keep the answer concise. [/INST] </s> 
-            [INST] Question: {question} 
-            Context: {context} 
-            Answer: [/INST]
+            Context information in markdown format is provided below.
+            ---------------------
+            {context}
+            ---------------------
+            Given the context information and not prior knowledge, answer the query in six sentences maximum and keep the answer concise.
+            If you don't know the answer, just say that you don't know. 
+            Query: {question}
+            Answer: 
             """
         )
 
@@ -68,12 +70,11 @@ class ChatMarkdown:
         if not self.chain:
             return "Please, add a markdown document first."
         # return the query results for debugging purpose
-        results = self.vector_store.similarity_search_with_score(query, k=3)
+        results = self.vector_store.similarity_search_with_score(query, k=6)
         chunks = ""
         for doc, score in results:
-            chunks += f"""-----------------------------------------------------------
+            chunks += f"""------[{score:.4f}]-----------------------------------------------------------
             {doc.metadata}
-            {score:.4f}
             {doc.page_content}
             """      
         return self.chain.invoke(query) + '\n' + chunks
