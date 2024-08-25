@@ -37,7 +37,7 @@ def read_and_save_file():
             file_path = tf.name
 
         with st.session_state["ingestion_spinner"], st.spinner(f"Ingesting {file.name}"):
-            is_ingested = st.session_state["assistant"].ingest(file_path)
+            is_ingested = st.session_state["assistant"].ingest(file_path, os.path.splitext(file.name)[0])
             if not is_ingested:
                 st.session_state["messages"].append((f"{file.name} has no content.", False))
             time.sleep(0.1)    
