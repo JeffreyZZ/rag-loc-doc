@@ -1,4 +1,5 @@
-from langchain_community.vectorstores import Chroma
+# from langchain_community.vectorstores import Chroma
+import time
 from langchain_community.chat_models import ChatOllama
 from langchain_community.embeddings import FastEmbedEmbeddings
 from langchain.schema.output_parser import StrOutputParser
@@ -11,14 +12,22 @@ from langchain_community.vectorstores.utils import filter_complex_metadata
 from langchain_ollama import OllamaEmbeddings
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain.retrievers.document_compressors import FlashrankRerank
-from langchain_community.retrievers import BM25Retriever
+from langchain_community.retrievers import BM25Retriever, ElasticSearchBM25Retriever
 from langchain.retrievers import EnsembleRetriever
+from elasticsearch import Elasticsearch, ConflictError
+from langchain_core.documents import Document
+from langchain_chroma import Chroma
+from MyElasticSearchBM25Retriever import MyElasticSearchBM25Retriever
 
 class ChatMarkdown:
-    vector_store = None
-    retriever = None
-    chain = None
-    keyword_retriever = None
+    # vector_store = None
+    # retriever = None
+    # chain = None
+    # keyword_retriever = None
+    # elastic_retriever = None
+    # ensemble_retriever = None
+    elasticsearch_url = "http://localhost:9200"
+    index_name = "rag-loc-doc"
 
     def __init__(self):
         self.model = ChatOllama(model="mistral")
@@ -42,6 +51,73 @@ class ChatMarkdown:
             Answer: 
             """
         )
+        #============================
+        # Create Elasticsearch index
+        #============================
+        client = Elasticsearch(self.elasticsearch_url)
+        exists = client.indices.exists(index=self.index_name)
+        if exists:
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    # delete all documents
+                    client.delete_by_query(
+                        index=self.index_name,
+                        body={
+                            "query": {
+                                "match_all": {}
+                            }
+                        },
+                        wait_for_completion=True
+                    )
+                    break
+                except ConflictError as e:
+                    print(f"ConflictError encountered: {e.info}")
+                    if attempt < max_retries - 1:
+                        time.sleep(2)
+
+            self.elastic_retriever = MyElasticSearchBM25Retriever(
+                client=Elasticsearch(self.elasticsearch_url), 
+                index_name=self.index_name)
+        else: 
+            self.elastic_retriever = MyElasticSearchBM25Retriever.create(
+                self.elasticsearch_url, 
+                self.index_name)
+        self.keyword_retriever = self.elastic_retriever
+        
+        #===========================
+        # Embedding: vector search
+        #===========================
+        # using local running mxbai-embed-large embedding model with Ollama, so needs to install Ollama
+        # and pull mxbai-embed-large model.  
+        # mxbai-embed-large: https://www.mixedbread.ai/docs/embeddings/mxbai-embed-large-v1
+        embeddings = OllamaEmbeddings(
+            model="mxbai-embed-large",
+        )
+        self.vector_store = Chroma(collection_name="my_collection", embedding_function=embeddings)
+        # TODO: output retriever result for debugging
+        self.retriever =  self.vector_store.as_retriever(
+            search_type="similarity_score_threshold",
+            search_kwargs={
+                "k": 3,
+                "score_threshold": 0.6,
+            },
+        )
+        #===================================
+        # Hybrid serarch: vector + keyword
+        #===================================
+        ensemble_retriever = EnsembleRetriever(retrievers=[self.elastic_retriever, self.retriever],
+                                               weights=[0.5, 0.5])
+        self.ensemble_retriever = ensemble_retriever
+        self.retriever = ensemble_retriever
+
+        #===================================
+        # Langchain chain
+        #===================================
+        self.chain = ({"context": self.ensemble_retriever, "question": RunnablePassthrough()}
+                    | self.prompt
+                    | self.model
+                    | StrOutputParser())
 
     def ingest(self, md_file_path: str, file_name: str):
         loader = TextLoader(file_path=md_file_path, encoding = 'UTF-8')
@@ -68,37 +144,16 @@ class ChatMarkdown:
             return False
 
         #===========================
-        # Embedding: vector search
+        # Insert into vector store
         #===========================
-        # using local running mxbai-embed-large embedding model with Ollama, so needs to install Ollama
-        # and pull mxbai-embed-large model.  
-        # mxbai-embed-large: https://www.mixedbread.ai/docs/embeddings/mxbai-embed-large-v1
-        embeddings = OllamaEmbeddings(
-            model="mxbai-embed-large",
-        )
-        self.vector_store =  Chroma.from_documents(documents=all_chunks, embedding=embeddings) # FastEmbedEmbeddings() is faster one for local debugging purpose
-        # TODO: output retriever result for debugging
-        retriever =  self.vector_store.as_retriever(
-            search_type="similarity_score_threshold",
-            search_kwargs={
-                "k": 6,
-                "score_threshold": 0.3,
-            },
-        )
+        self.vector_store.add_documents(documents=all_chunks) #  embedding=embeddings FastEmbedEmbeddings() is faster one for local debugging purpose
 
-        #=======================
-        # Keyword search: BM25
-        #=======================
-        bm25_retriever = BM25Retriever.from_documents(all_chunks)
-        bm25_retriever.k =  6  # Retrieve top 2 results
-        self.keyword_retriever = bm25_retriever
-
-        #===================================
-        # Hybrid serarch: vector + keyword
-        #===================================
-        ensemble_retriever = EnsembleRetriever(retrievers=[bm25_retriever, retriever],
-                                               weights=[0.4, 0.6])
-       
+        #===========================
+        # Insert into keyword store
+        #===========================
+        # Convert to a list of strings
+        list_of_contents = [chunk.page_content for chunk in all_chunks]
+        self.elastic_retriever.add_texts(list_of_contents)
 
         #============
         # Reranking 
@@ -106,23 +161,27 @@ class ChatMarkdown:
         # FlashRank: https://github.com/PrithivirajDamodaran/FlashRank
         # TODO: output reranking result for debugging
         compressor = FlashrankRerank()
-        self.retriever = ContextualCompressionRetriever(
-            base_compressor=compressor, 
-            base_retriever=ensemble_retriever
-        )
+        # self.retriever = ContextualCompressionRetriever(
+        #     base_compressor=compressor, 
+        #     base_retriever=ensemble_retriever
+        # )
 
-        self.chain = ({"context": self.retriever, "question": RunnablePassthrough()}
-                    | self.prompt
-                    | self.model
-                    | StrOutputParser())
         return True
 
     def ask(self, query: str):
         if not self.chain:
             return "Please, add a markdown document first."
-        # return the query results for debugging purpose
-        results = self.vector_store.similarity_search_with_score(query, k=6)
+        
         chunks = ""
+        documents = self.ensemble_retriever.get_relevant_documents(query)
+        
+        for doc in documents:
+            chunks += f"""------Retriever---------------------------------------------------------------
+            {doc.metadata}
+            {doc.page_content}
+            """     
+        # return the query results for debugging purpose
+        results = self.vector_store.similarity_search_with_score(query, k=3)
         for doc, score in results:
             chunks += f"""------[{score:.4f}]-----------------------------------------------------------
             {doc.metadata}
@@ -130,10 +189,13 @@ class ChatMarkdown:
             """     
 
         keyword_results = self.keyword_retriever.invoke(query)
-
+        for doc in keyword_results:
+            chunks += f"""------[Elastic]---------------------------------------------------------------
+            {doc}
+            """  
         return self.chain.invoke(query) + '\n' + chunks
 
     def clear(self):
-        self.vector_store = None
+        # self.vector_store = None
         self.retriever = None
-        self.chain = None
+        # self.chain = None
