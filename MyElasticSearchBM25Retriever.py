@@ -9,7 +9,11 @@ from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 
-
+# ===================================================================
+# Extends the original ElasticSearchBM25Retriever 
+#  1. support top k
+#  2. add query score
+#====================================================================
 class MyElasticSearchBM25Retriever(BaseRetriever):
     """`Elasticsearch` retriever that uses `BM25`.
 
@@ -40,7 +44,7 @@ class MyElasticSearchBM25Retriever(BaseRetriever):
     """Elasticsearch client."""
     index_name: str
     """Name of the index to use in Elasticsearch."""
-    k: int=2
+    k: int=3
     """Top k returned from Elasticsearch."""
 
     @classmethod
@@ -135,5 +139,10 @@ class MyElasticSearchBM25Retriever(BaseRetriever):
 
         docs = []
         for r in res["hits"]["hits"]:
-            docs.append(Document(page_content=r["_source"]["content"]))
-        return docs
+            doc = Document(page_content=r["_source"]["content"])
+            #=========================================
+            # add Elasticsearch query _score to doc
+            #=========================================
+            doc.metadata["score"] = r["_score"]
+            docs.append(doc)
+            return docs

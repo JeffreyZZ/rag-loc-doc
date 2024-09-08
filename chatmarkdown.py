@@ -173,8 +173,9 @@ class ChatMarkdown:
 
         keyword_results = self.keyword_retriever.invoke(query)
         for doc in keyword_results:
-            chunks += f"""------[Elastic]---------------------------------------------------------------
-            {doc}
+            chunks += f"""------[Elastic:{doc.metadata.get('score'):.4f}]--------------------------------------------------
+            {doc.metadata}
+            {doc.page_content}
             """  
         return self.chain.invoke(query) + '\n' + chunks
 
