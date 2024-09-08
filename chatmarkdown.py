@@ -57,25 +57,6 @@ class ChatMarkdown:
         client = Elasticsearch(self.elasticsearch_url)
         exists = client.indices.exists(index=self.index_name)
         if exists:
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    # delete all documents
-                    client.delete_by_query(
-                        index=self.index_name,
-                        body={
-                            "query": {
-                                "match_all": {}
-                            }
-                        },
-                        wait_for_completion=True
-                    )
-                    break
-                except ConflictError as e:
-                    print(f"ConflictError encountered: {e.info}")
-                    if attempt < max_retries - 1:
-                        time.sleep(2)
-
             self.elastic_retriever = MyElasticSearchBM25Retriever(
                 client=Elasticsearch(self.elasticsearch_url), 
                 index_name=self.index_name)

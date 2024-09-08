@@ -5,9 +5,12 @@ import streamlit as st
 from streamlit_chat import message
 from rag import ChatPDF
 from chatmarkdown import ChatMarkdown
+from elasticsearch import Elasticsearch, ConflictError
 
 st.set_page_config(page_title="ChatMarkdown")
 
+elasticsearch_url = "http://localhost:9200"
+index_name = "rag-loc-doc"
 
 def display_messages():
     st.subheader("Chat")
@@ -31,6 +34,29 @@ def read_and_save_file():
     st.session_state["messages"] = []
     st.session_state["user_input"] = ""
 
+    # TODO: need to clean up Elasticsearch and vector store before ingestion starts.
+    client = Elasticsearch(elasticsearch_url)
+    exists = client.indices.exists(index=index_name)
+    if exists:
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                # delete all documents
+                client.delete_by_query(
+                    index=index_name,
+                        body={
+                            "query": {
+                                "match_all": {}
+                            }
+                        },
+                        wait_for_completion=True
+                    )
+                break
+            except ConflictError as e:
+                print(f"ConflictError encountered: {e.info}")
+                if attempt < max_retries - 1:
+                    time.sleep(2)
+                        
     for file in st.session_state["file_uploader"]:
         with tempfile.NamedTemporaryFile(delete=False) as tf:
             tf.write(file.getbuffer())
