@@ -18,6 +18,7 @@ from elasticsearch import Elasticsearch, ConflictError
 from langchain_core.documents import Document
 from langchain_chroma import Chroma
 from MyElasticSearchBM25Retriever import MyElasticSearchBM25Retriever
+from MyVectorStoreRetriever import MyVectorStoreRetriever
 
 class ChatMarkdown:
     # vector_store = None
@@ -77,20 +78,21 @@ class ChatMarkdown:
         )
         self.vector_store = Chroma(collection_name="my_collection", embedding_function=embeddings)
         # TODO: output retriever result for debugging
-        self.retriever =  self.vector_store.as_retriever(
+        self.retriever = MyVectorStoreRetriever(
+            vectorstore=self.vector_store,
             search_type="similarity_score_threshold",
             search_kwargs={
-                "k": 3,
-                "score_threshold": 0.6,
+                "score_threshold": 0.45,
+                "k": 3
             },
-        )
+        ) 
+        
         #===================================
         # Hybrid serarch: vector + keyword
         #===================================
         ensemble_retriever = EnsembleRetriever(retrievers=[self.elastic_retriever, self.retriever],
                                                weights=[0.5, 0.5])
         self.ensemble_retriever = ensemble_retriever
-        self.retriever = ensemble_retriever
 
         #===================================
         # Langchain chain
@@ -146,7 +148,6 @@ class ChatMarkdown:
         #     base_compressor=compressor, 
         #     base_retriever=ensemble_retriever
         # )
-
         return True
 
     def ask(self, query: str):
@@ -162,9 +163,10 @@ class ChatMarkdown:
             {doc.page_content}
             """     
         # return the query results for debugging purpose
-        results = self.vector_store.similarity_search_with_score(query, k=3)
-        for doc, score in results:
-            chunks += f"""------[{score:.4f}]-----------------------------------------------------------
+        # results = self.vector_store.similarity_search_with_score(query, k=3)
+        results = self.retriever.invoke(query)    
+        for doc in results:
+            chunks += f"""------[Vector:{doc.metadata.get('score'):.4f}]---------------------------------------------------
             {doc.metadata}
             {doc.page_content}
             """     
@@ -178,5 +180,6 @@ class ChatMarkdown:
 
     def clear(self):
         # self.vector_store = None
-        self.retriever = None
+        # self.retriever = None
         # self.chain = None
+        pass
