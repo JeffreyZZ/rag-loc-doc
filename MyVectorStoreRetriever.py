@@ -19,6 +19,7 @@ class MyVectorStoreRetriever(VectorStoreRetriever):
         #==============================================
         for doc, similarity in docs_and_similarities:
             doc.metadata["score"] = similarity
+            doc.metadata["source"] = "vector"
 
         docs = [doc for doc, _ in docs_and_similarities]
         return docs

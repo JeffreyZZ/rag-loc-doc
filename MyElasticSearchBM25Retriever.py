@@ -138,11 +138,14 @@ class MyElasticSearchBM25Retriever(BaseRetriever):
         res = self.client.search(index=self.index_name, body=query_dict)
 
         docs = []
-        for r in res["hits"]["hits"]:
-            doc = Document(page_content=r["_source"]["content"])
-            #=========================================
-            # add Elasticsearch query _score to doc
-            #=========================================
-            doc.metadata["score"] = r["_score"]
-            docs.append(doc)
-            return docs
+        if res.get("hits") and res["hits"].get("max_score"):
+            max_score = res["hits"]["max_score"]
+            for r in res["hits"]["hits"]:
+                doc = Document(page_content=r["_source"]["content"])
+                #=========================================
+                # add Elasticsearch query _score to doc
+                #=========================================
+                doc.metadata["score"] = r["_score"]/max_score # normalize score
+                doc.metadata["source"] = "elastic"
+                docs.append(doc)
+        return docs
