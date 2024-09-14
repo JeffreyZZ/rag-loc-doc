@@ -46,6 +46,8 @@ class MyElasticSearchBM25Retriever(BaseRetriever):
     """Name of the index to use in Elasticsearch."""
     k: int=3
     """Top k returned from Elasticsearch."""
+    score_threshold: float=0.5
+    """a floating point value between 0 to 1 to filter the resulting set of retrieved docs"""
 
     @classmethod
     def create(
@@ -147,5 +149,6 @@ class MyElasticSearchBM25Retriever(BaseRetriever):
                 #=========================================
                 doc.metadata["score"] = r["_score"]/max_score # normalize score
                 doc.metadata["source"] = "elastic"
-                docs.append(doc)
+                if doc.metadata["score"] >= self.score_threshold:
+                    docs.append(doc)
         return docs

@@ -155,7 +155,7 @@ class ChatMarkdown:
             return "Please, add a markdown document first."
         
         chunks = ""
-        documents = self.ensemble_retriever.get_relevant_documents(query)
+        documents = self.ensemble_retriever.invoke(query)
         
         for doc in documents:
             chunks += f"""------Retriever---------------------------------------------------------------
