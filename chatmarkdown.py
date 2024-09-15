@@ -31,7 +31,7 @@ class ChatMarkdown:
     index_name = "rag-loc-doc"
 
     def __init__(self):
-        self.model = ChatOllama(model="mistral")
+        self.model = ChatOllama(model="llama3.1")
         headers_to_split_on = [
             ("#", "Header 1"), 
             ("##", "Header 2"), 
