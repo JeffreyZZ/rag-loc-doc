@@ -8,6 +8,7 @@ from typing import Any, Iterable, List
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
+from OllamaJsonQuery import OllamaJSONQuery
 
 # ===================================================================
 # Extends the original ElasticSearchBM25Retriever 
@@ -44,9 +45,9 @@ class MyElasticSearchBM25Retriever(BaseRetriever):
     """Elasticsearch client."""
     index_name: str
     """Name of the index to use in Elasticsearch."""
-    k: int=3
+    k: int=6
     """Top k returned from Elasticsearch."""
-    score_threshold: float=0.5
+    score_threshold: float=0.8
     """a floating point value between 0 to 1 to filter the resulting set of retrieved docs"""
 
     @classmethod
@@ -136,9 +137,14 @@ class MyElasticSearchBM25Retriever(BaseRetriever):
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> List[Document]:
-        query_dict = {"query": {"match": {"content": query}}, "size": self.k}
-        res = self.client.search(index=self.index_name, body=query_dict)
+        
+        # ask LLM to extract keywords
+        ollama_query = OllamaJSONQuery(model_name="llama3.1")
+        keywords = ollama_query.query(query)
+        keywords_query = ' '.join(keywords)
 
+        query_dict = {"query": {"match": {"content": keywords_query}}, "size": self.k}
+        res = self.client.search(index=self.index_name, body=query_dict)
         docs = []
         if res.get("hits") and res["hits"].get("max_score"):
             max_score = res["hits"]["max_score"]

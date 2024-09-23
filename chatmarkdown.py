@@ -19,6 +19,7 @@ from langchain_core.documents import Document
 from langchain_chroma import Chroma
 from MyElasticSearchBM25Retriever import MyElasticSearchBM25Retriever
 from MyVectorStoreRetriever import MyVectorStoreRetriever
+from OllamaJsonQuery import OllamaJSONQuery
 
 class ChatMarkdown:
     # vector_store = None
@@ -157,6 +158,12 @@ class ChatMarkdown:
         chunks = ""
         documents = self.ensemble_retriever.invoke(query)
         
+        ollama_query = OllamaJSONQuery(model_name="llama3.1")
+        query_keywords = ollama_query.query(query)
+        chunks += f"""------query keywords-------------------------------------------------------------
+                  {query_keywords}
+                  """
+                
         for doc in documents:
             chunks += f"""------Retriever---------------------------------------------------------------
             {doc.metadata}
